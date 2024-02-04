@@ -19,7 +19,7 @@ export CC CXX AR STRIP
 export PATH := $(HOST_TOOLS):$(PATH)
 export CHIP_ARCH
 #
-TOPSUBDIRS := smart_doorbell autotest smart_pad cv181x_boot peripherals_test usb_cam ipc barcode_scan sophpi
+TOPSUBDIRS := smart_doorbell autotest smart_pad cv181x_boot peripherals_test usb_cam ipc barcode_scan sophpi sscma_at_server
 #
 .PHONY:all clean install $(TOPSUBDIRS)
 
