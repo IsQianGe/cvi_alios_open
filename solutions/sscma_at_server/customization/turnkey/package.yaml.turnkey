@@ -1,7 +1,7 @@
 ## 第一部分： 基础信息
-name: sophpi                                      # <必选项> 包名称 （符合C语言变量命名规则），长度少于等于64字节
+name: sscma_at_server                                      # <必选项> 包名称 （符合C语言变量命名规则），长度少于等于64字节
 version: v7.5.1                                     # <必选项> 组件版本号
-description: yoc sophpi                           # <必选项> 建议至少20字以上
+description: yoc sscma at server                           # <必选项> 建议至少20字以上
 type: solution                                      # <必选项> 组件类型，为：solution, chip, board, common, sdk
 
 hw_info:
@@ -166,10 +166,10 @@ def_config:
   CONFIG_KV_ENABLE_CACHE: 1
   CONFIG_INIT_TASK_STACK_SIZE: 8192
 ## Demo APP Func config
-  CONFIG_APP_ETHERNET_SUPPORT: 0
+  CONFIG_APP_ETHERNET_SUPPORT: 1
   CONFIG_APP_HI3861_WIFI_SUPPORT: 0
   CONFIG_APP_CX_CLOUD_SUPPORT: 0
-  CONFIG_APP_RTSP_SUPPORT: 0
+  CONFIG_APP_RTSP_SUPPORT: 1
   CONFIG_APP_VENC_SUPPORT: 1
   CONFIG_APP_GUI_SUPPORT: 0
   CONFIG_APP_AV_COMP_SUPPORT: 1
@@ -191,16 +191,6 @@ def_config:
   CONFIG_SENSOR_OV_OV5647: 1
   CONFIG_SUPPORT_USB_HC: 0 
 
-  CONFIG_EXT4_PARTITION_NAME: "ext4"
-# SHOW_PART_INFO_EN: 1
-  CONFIG_PARTITION_SUPPORT_BLOCK_OR_MULTI_DEV: y
-  CONFIG_PARTITION_SUPPORT_EMMC: 0
-  CONFIG_PARTITION_SUPPORT_SD: 1
-  CONFIG_PARTITION_SUPPORT_SPINORFLASH: 0
-  CONFIG_NOT_USE_HC_ERASE_UNIT_SIZE: y
-  CONFIG_KV_GET_ERASE_FLAG_AUTO: 1
-  CONFIG_COMP_SDMMC: 1
-
   CONFIG_SNS0_TYPE: 29
 
   CONFIG_PANEL_HX8394: 0
@@ -208,7 +198,7 @@ def_config:
   CONFIG_PANEL_ST7701S: 1
 
   CONFIG_VENC_TEST_CHN: 2
-  CONFIG_PQTOOL_SUPPORT: 0
+  CONFIG_PQTOOL_SUPPORT: 1
   CONFIG_PQBIN_USE_JSON: 0
   CONFIG_ISP_SUPPORT_PROC: 0
   CONFIG_ENABLE_FASTBOOT: 0
