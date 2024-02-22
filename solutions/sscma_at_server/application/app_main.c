@@ -20,6 +20,10 @@
 #include "cvi_ispd2.h"
 #endif
 
+#if CONFIG_APP_AV_COMP_SUPPORT
+#include "av_comp_app.h"
+#endif
+
 #define TAG "app"
 
 
@@ -43,6 +47,13 @@ int main(int argc, char *argv[])
 	ethernet_init();
 	#endif
 	YOC_SYSTEM_ToolInit();
+	#if (CONFIG_PQTOOL_SUPPORT == 1)
+	usleep(1000);
+	isp_daemon2_init(5566);
+	#endif
+	#if (CONFIG_APP_AV_COMP_SUPPORT == 1)
+	MEDIA_AV_Init();
+	#endif
 	APP_CustomEventStart();
 	while (1) {
 		aos_msleep(3000);
