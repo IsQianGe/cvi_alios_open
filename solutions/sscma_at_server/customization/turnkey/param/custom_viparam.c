@@ -7,6 +7,9 @@
  */
 #include "custom_param.h"
 
+#define BIN_DATA_SIZE 174281
+extern unsigned char cvi_sensor_pq_param[];
+
 PARAM_CLASSDEFINE(PARAM_SNS_CFG_S,SENSORCFG,CTX,Sensor)[] = {
     {
         .enSnsType = CONFIG_SNS0_TYPE,
@@ -19,6 +22,12 @@ PARAM_CLASSDEFINE(PARAM_ISP_CFG_S,ISPCFG,CTX,ISP)[] = {
     {
         .bMonoSet = {0},
         .bUseSingleBin = 0,
+        .astPQBinDes[0] =
+        {
+            .pIspBinData = cvi_sensor_pq_param,
+            .u32IspBinDataLen = BIN_DATA_SIZE,
+            .binID = CVI_BIN_ID_ISP0,
+        },
     }
 };
 
