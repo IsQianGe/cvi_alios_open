@@ -139,13 +139,13 @@ uint8_t rasters[][13] = {
 {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06, 0x8f, 0xf1, 0x60, 0x00, 0x00, 0x00}
 };
 
-void init_yolo(CVI_MODEL_HANDLE *model, int32_t *input_num, int32_t *output_num, CVI_TENSOR **input_tensors, CVI_TENSOR **output_tensors, struct uvc_frame_info_st *stVFrame)
+void init_yolo(CVI_MODEL_HANDLE *model, int32_t *input_num, int32_t *output_num, CVI_TENSOR **input_tensors, CVI_TENSOR **output_tensors)
 {
 	int ret = 0;
-	CVI_SHAPE input_shape;
 	CVI_TENSOR *input;
+	CVI_SHAPE input_shape;
 
-	const char *model_file = SD_FATFS_MOUNTPOINT "/yolov5s_fused_preprocess.cvimodel";
+	const char *model_file = SD_FATFS_MOUNTPOINT "/yolov5s_fused_preprocess_aligned_input.cvimodel";
 	ret = CVI_NN_RegisterModel(model_file, model);
 	if (ret != CVI_RC_SUCCESS)
 	{
@@ -163,8 +163,8 @@ void init_yolo(CVI_MODEL_HANDLE *model, int32_t *input_num, int32_t *output_num,
 
 	// nchw
 	input_shape = CVI_NN_TensorShape(input);
-	assert(input_shape.dim[2] == stVFrame->width);
-	assert(input_shape.dim[3] == stVFrame->height);
+	
+	printf("input shape: %d, %d\n", input_shape.dim[2], input_shape.dim[3]);
 }
 
 int BGRPacked2RBGPlanar(uint8_t *packed, uint8_t *planar, int height, int width)
@@ -183,12 +183,38 @@ int BGRPacked2RBGPlanar(uint8_t *packed, uint8_t *planar, int height, int width)
 	return 0;
 }
 
-void run_yolo(CVI_MODEL_HANDLE model, int32_t *input_num, int32_t *output_num, CVI_TENSOR **input_tensors, CVI_TENSOR **output_tensors, uint8_t *data)
+void BGR_resize(uint8_t *input, int width, int height, uint8_t *output, int bgr_width, int bgr_height) {
+    float x_ratio = (float)width / bgr_width;
+    float y_ratio = (float)height / bgr_height;
+    
+    for (int y = 0; y < bgr_height; y++) {
+        for (int x = 0; x < bgr_width; x++) {
+            int origin_x = (int)(x * x_ratio);
+            int origin_y = (int)(y * y_ratio);
+            
+            int input_idx = (origin_y * width + origin_x) * 3;
+            int output_idx = (y * bgr_width + x) * 3;
+            
+            memcpy(output + output_idx, input + input_idx, 3);
+        }
+    }
+}
+
+void run_yolo(CVI_MODEL_HANDLE model, int32_t *input_num, int32_t *output_num, CVI_TENSOR **input_tensors, CVI_TENSOR **output_tensors, VIDEO_FRAME_S stVFrame)
 {
 	int ret = 0;
 	CVI_TENSOR *input;
+	CVI_SHAPE input_shape;
 	input = CVI_NN_GetTensorByName(CVI_NN_DEFAULT_TENSOR, *input_tensors, *input_num);
-	memcpy(CVI_NN_TensorPtr(input), data, CVI_NN_TensorSize(input));
+
+	input_shape = CVI_NN_TensorShape(input);
+	uint8_t *ptr_packed = (uint8_t *)malloc(3 *input_shape.dim[2] * input_shape.dim[3]);
+	uint8_t *ptr_planar = (uint8_t *)malloc(3 *input_shape.dim[2] * input_shape.dim[3]);
+	BGR_resize((uint8_t *)stVFrame.u64PhyAddr[0], stVFrame.u32Width, stVFrame.u32Height, ptr_packed, input_shape.dim[2], input_shape.dim[3]);
+	BGRPacked2RBGPlanar(ptr_packed, ptr_planar, input_shape.dim[2], input_shape.dim[3]);
+	memcpy(CVI_NN_TensorPtr(input), ptr_planar, CVI_NN_TensorSize(input));
+	free(ptr_packed);
+	free(ptr_planar);
 
 	ret = CVI_NN_Forward(model, *input_tensors, *input_num, *output_tensors, *output_num);
 	if (ret != CVI_RC_SUCCESS)
@@ -267,7 +293,38 @@ void NMS(detection *dets, int *total, float thresh) {
   }
 }
 
-void draw(VIDEO_FRAME_S stVFrame, detection *dets, int32_t dets_num)
+void draw_label(uint8_t *frame, int x1, int y1, int32_t width, int32_t height, char* label, int label_len)
+{
+	uint8_t *pos1, *pos2;
+	uint8_t x2, y2;
+	/* x1 is the same: x1 = MAX (0, (width * a->x) / bdata->i_width); */
+	y1 = MAX (0, (y1 - 14));
+	pos1 = &frame[(y1 * width + x1) * 3];
+	for (int j = 0; j < label_len; j++) {
+	unsigned int char_index = label[j];
+	if (char_index < 32 || char_index >= 127) {
+		/* It's not ASCII */
+		char_index = '*';
+	}
+	char_index -= 32;
+	if ((x1 + 8 * 3) > (int) width)
+		break;                /* Stop drawing if it may overfill */
+	pos2 = pos1;
+	for (y2 = 0; y2 < 13; y2++) {
+		/* 13 : character height */
+		for (x2 = 0; x2 < 8; x2++) {
+		/* 8: character width */
+		*(pos2 + x2 * 3) = rasters[char_index][13-y2] & (1 << (7 - x2)) ?
+			PIXEL_VALUE : *(pos2 + x2 * 3);
+		}
+		pos2 += width * 3;
+	}
+	x1 += 9 * 3;
+	pos1 += 9 * 3;              /* charater width + 1px */
+	}
+}
+
+void draw(VIDEO_FRAME_S stVFrame, detection *dets, int32_t dets_num, uint64_t start_time)
 {
 	uint8_t *frame = (uint8_t *)stVFrame.u64PhyAddr[0];
 	int32_t color = 3;
@@ -307,35 +364,17 @@ void draw(VIDEO_FRAME_S stVFrame, detection *dets, int32_t dets_num)
 		char label[20];
 		int label_len;
 		label_len = snprintf(label, sizeof(label), "%s %.2f", coco_names[dets[i].cls], dets[i].score);
-		/* x1 is the same: x1 = MAX (0, (width * a->x) / bdata->i_width); */
-		y1 = MAX (0, (y1 - 14));
-		pos1 = &frame[(y1 * width + x1) * 3];
-		for (int j = 0; j < label_len; j++) {
-		unsigned int char_index = label[j];
-		if (char_index < 32 || char_index >= 127) {
-			/* It's not ASCII */
-			char_index = '*';
-		}
-		char_index -= 32;
-		if ((x1 + 8 * 3) > (int) width)
-			break;                /* Stop drawing if it may overfill */
-		pos2 = pos1;
-		for (y2 = 0; y2 < 13; y2++) {
-			/* 13 : character height */
-			for (x2 = 0; x2 < 8; x2++) {
-			/* 8: character width */
-			*(pos2 + x2 * 3) = rasters[char_index][13-y2] & (1 << (7 - x2)) ?
-				PIXEL_VALUE : *(pos2 + x2 * 3);
-			}
-			pos2 += width * 3;
-		}
-		x1 += 9 * 3;
-		pos1 += 9 * 3;              /* charater width + 1px */
-		}
+		draw_label(frame, x1, y1, width, height, label, label_len);
+
   	}
+	/* 3. Draw FPS */
+	char fps[20];
+	int fps_len;
+	fps_len = snprintf(fps, sizeof(fps), "%.2f", 1000.0 / (float)(aos_now_ms() - start_time));
+	draw_label(frame, 0, 0, width, height, fps, fps_len);
 }
 
-void draw_res(VIDEO_FRAME_S stVFrame, int32_t output_num, CVI_TENSOR *output_tensors)
+void draw_res(VIDEO_FRAME_S stVFrame, int32_t input_num, int32_t output_num, CVI_TENSOR *input_tensors, CVI_TENSOR *output_tensors, uint64_t start_time)
 {
 	CVI_SHAPE output_shape;
 
@@ -345,6 +384,17 @@ void draw_res(VIDEO_FRAME_S stVFrame, int32_t output_num, CVI_TENSOR *output_ten
 	float iou_thresh = 0.5;
 	int det_num = 0;
 	detection *dets = (detection *)malloc(sizeof(detection) * 5000);
+
+	CVI_TENSOR *input;
+	CVI_SHAPE input_shape;
+	float x_ratio;
+	float y_ratio;
+	
+	input = CVI_NN_GetTensorByName(CVI_NN_DEFAULT_TENSOR, input_tensors, input_num);
+	input_shape = CVI_NN_TensorShape(input);
+
+	x_ratio = (float)stVFrame.u32Width / input_shape.dim[2];
+	y_ratio = (float)stVFrame.u32Height / input_shape.dim[3];
 
 	for (int j = 0; j < output_num; j++)
     {
@@ -390,12 +440,12 @@ void draw_res(VIDEO_FRAME_S stVFrame, int32_t output_num, CVI_TENSOR *output_ten
 				det_obj.cls = category;
 				det_obj.batch_idx = 1;
 
-				det_obj.bbox.x = (sigmoid(x) * 2 - 0.5 + col) * down_stride;
-				det_obj.bbox.y = (sigmoid(y) * 2 - 0.5 + row) * down_stride;
+				det_obj.bbox.x = (sigmoid(x) * 2 - 0.5 + col) * down_stride * x_ratio;
+				det_obj.bbox.y = (sigmoid(y) * 2 - 0.5 + row) * down_stride * y_ratio;
 				det_obj.bbox.w =
-					pow(sigmoid(w) * 2, 2) * anchors_[j][a][0];
+					pow(sigmoid(w) * 2, 2) * anchors_[j][a][0] * x_ratio;
 				det_obj.bbox.h =
-					pow(sigmoid(h) * 2, 2) * anchors_[j][a][1];
+					pow(sigmoid(h) * 2, 2) * anchors_[j][a][1] * y_ratio;
 				dets[det_num] = det_obj;
 				++det_num;
 			}
@@ -406,7 +456,6 @@ void draw_res(VIDEO_FRAME_S stVFrame, int32_t output_num, CVI_TENSOR *output_ten
 	{
 		printf("raw detection num: %d\n", det_num);
 		NMS(dets, &det_num, iou_thresh);
-		draw(stVFrame, dets, det_num);
 		//correctYoloBoxes(dets, det_num, height, width, height, width);
 		printf("get detection num: %d\n", det_num);
 
@@ -419,8 +468,10 @@ void draw_res(VIDEO_FRAME_S stVFrame, int32_t output_num, CVI_TENSOR *output_ten
 
 		printf("------\n");
 		printf("%d objects are detected\n", det_num);
+		printf("usd time: %lld ms\n", (aos_now_ms() - start_time));
 		printf("------\n");
 	}
+	draw(stVFrame, dets, det_num, start_time);
 	free(dets);
 }
 

@@ -135,11 +135,7 @@ CVI_S32 is_media_info_update(){
 
 	switch(uvc_format_info.format_index){
 	case YUYV_FORMAT_INDEX:
-		enPixelFormat = PIXEL_FORMAT_YUYV;
-		if (uvc_format_info.frames->height == uvc_format_info.frames->width)
-		{
-			enPixelFormat = PIXEL_FORMAT_BGR_888;
-		}
+		enPixelFormat = PIXEL_FORMAT_BGR_888;
 		break;
 	case NV21_FORMAT_INDEX:
 		enPixelFormat = PIXEL_FORMAT_NV21;
@@ -233,11 +229,7 @@ void uvc_media_update(){
 
 	switch(uvc_format_info.format_index){
 	case YUYV_FORMAT_INDEX:
-		enPixelFormat = PIXEL_FORMAT_YUYV;
-		if (uvc_format_info.frames->height == uvc_format_info.frames->width)
-		{
-			enPixelFormat = PIXEL_FORMAT_BGR_888;
-		}
+		enPixelFormat = PIXEL_FORMAT_BGR_888;
 		break;
 	case NV21_FORMAT_INDEX:
 		enPixelFormat = PIXEL_FORMAT_NV21;
@@ -396,10 +388,7 @@ static void *send_to_uvc()
 			if(uvc_update){
 				uvc_media_update();
 				uvc_get_video_format_info(&uvc_format_info);
-				if (uvc_format_info.frames->height == uvc_format_info.frames->width){
-					cvi_tpu_init();
-					init_yolo(&model, &input_num, &output_num, &input_tensors, &output_tensors, uvc_format_info.frames);
-				}
+				init_yolo(&model, &input_num, &output_num, &input_tensors, &output_tensors);
 				uvc_update = 0;
 			}
 
@@ -433,61 +422,34 @@ static void *send_to_uvc()
 
 				}else
 			if(YUYV_FORMAT_INDEX == uvc_format_info.format_index){
-				if (uvc_format_info.frames->height == uvc_format_info.frames->width){
-					ret = CVI_VPSS_GetChnFrame(UVC_VPSS_GRP, UVC_VPSS_CHN, pstVideoFrame, -1);
-					if (ret != CVI_SUCCESS){
+				ret = CVI_VPSS_GetChnFrame(UVC_VPSS_GRP, UVC_VPSS_CHN, pstVideoFrame, -1);
+				if (ret != CVI_SUCCESS){
 //						printf("CVI_VPSS_GetChnFrame failed\n");
-						aos_msleep(1);
-						continue;
-					}
-					CVI_VPSS_GetChnAttr(UVC_VPSS_GRP, UVC_VPSS_CHN, pstChnAttr);
-					uint8_t *ptr_planar = (uint8_t *)malloc(3 * pstChnAttr->u32Width * pstChnAttr->u32Height);
-					BGRPacked2RBGPlanar((uint8_t *)pstVideoFrame->stVFrame.u64PhyAddr[0], ptr_planar, pstChnAttr->u32Height, pstChnAttr->u32Width);
-
-					run_yolo(model, &input_num, &output_num, &input_tensors, &output_tensors, ptr_planar);
-
-					draw_res(pstVideoFrame->stVFrame, output_num, output_tensors);
-
-					memset(ptr_planar, 0, 3 * pstChnAttr->u32Width * pstChnAttr->u32Height);
-					// convert BGR to YUYV
-					BGR2YUV(ptr_planar, (uint8_t *)pstVideoFrame->stVFrame.u64PhyAddr[0], pstChnAttr->u32Height, pstChnAttr->u32Width);
-					int data_len = pstChnAttr->u32Width * 2;
-					for(i = 0; i < (pstChnAttr->u32Height); ++i){
-						memcpy(packet_buffer_media + buf_len, ptr_planar + buf_len_stride, data_len);
-
-						buf_len += pstChnAttr->u32Width * 2;
-						buf_len_stride += pstVideoFrame->stVFrame.u32Stride[0];
-					}
-					free(ptr_planar);
-					pstVideoFrame->stVFrame.pu8VirAddr[0] = NULL;
-
-					ret = CVI_VPSS_ReleaseChnFrame(UVC_VPSS_GRP, UVC_VPSS_CHN, pstVideoFrame);
-					if (ret != CVI_SUCCESS)
-						printf("CVI_VPSS_ReleaseChnFrame failed\n");
+					aos_msleep(1);
+					continue;
 				}
-				else{
-					ret = CVI_VPSS_GetChnFrame(UVC_VPSS_GRP, UVC_VPSS_CHN, pstVideoFrame, -1);
-					if(ret != CVI_SUCCESS){
-//					printf("CVI_VPSS_GetChnFrame failed\n");
-						aos_msleep(1);
-						continue;
-					}
-					CVI_VPSS_GetChnAttr(UVC_VPSS_GRP, UVC_VPSS_CHN, pstChnAttr);
+				CVI_VPSS_GetChnAttr(UVC_VPSS_GRP, UVC_VPSS_CHN, pstChnAttr);
 
-					pstVideoFrame->stVFrame.pu8VirAddr[0] = (uint8_t *)pstVideoFrame->stVFrame.u64PhyAddr[0];
-					int data_len = pstChnAttr->u32Width * 2;
-					for (i = 0;i < (pstChnAttr->u32Height); ++i){
-						memcpy(packet_buffer_media + buf_len, pstVideoFrame->stVFrame.pu8VirAddr[0] + buf_len_stride, data_len);
+				uint64_t start_time = aos_now_ms();
+				run_yolo(model, &input_num, &output_num, &input_tensors, &output_tensors, pstVideoFrame->stVFrame);
+				draw_res(pstVideoFrame->stVFrame, input_num, output_num, input_tensors, output_tensors, start_time);
 
-						buf_len += pstChnAttr->u32Width * 2;
-						buf_len_stride += pstVideoFrame->stVFrame.u32Stride[0];
-					}
-					pstVideoFrame->stVFrame.pu8VirAddr[0] = NULL;
+				uint8_t *ptr_yuv = (uint8_t *)malloc(3 * pstChnAttr->u32Width * pstChnAttr->u32Height);
+				// convert BGR to YUYV
+				BGR2YUV(ptr_yuv, (uint8_t *)pstVideoFrame->stVFrame.u64PhyAddr[0], pstChnAttr->u32Width, pstChnAttr->u32Height);
+				int data_len = pstChnAttr->u32Width * 2;
+				for(i = 0; i < (pstChnAttr->u32Height); ++i){
+					memcpy(packet_buffer_media + buf_len, ptr_yuv + buf_len_stride, data_len);
 
-					ret = CVI_VPSS_ReleaseChnFrame(UVC_VPSS_GRP, UVC_VPSS_CHN, pstVideoFrame);
-					if(ret != CVI_SUCCESS)
-						printf("CVI_VPSS_ReleaseChnFrame failed\n");
+					buf_len += pstChnAttr->u32Width * 2;
+					buf_len_stride += pstVideoFrame->stVFrame.u32Stride[0];
 				}
+				free(ptr_yuv);
+				pstVideoFrame->stVFrame.pu8VirAddr[0] = NULL;
+
+				ret = CVI_VPSS_ReleaseChnFrame(UVC_VPSS_GRP, UVC_VPSS_CHN, pstVideoFrame);
+				if (ret != CVI_SUCCESS)
+					printf("CVI_VPSS_ReleaseChnFrame failed\n");
 			}else
 			if(NV21_FORMAT_INDEX == uvc_format_info.format_index){
 				ret = CVI_VPSS_GetChnFrame(UVC_VPSS_GRP, UVC_VPSS_CHN, pstVideoFrame, -1);
@@ -583,6 +545,7 @@ int MEDIA_AV_Init()
 
 	usb_av_comp_init();
 
+	cvi_tpu_init();
 	packet_buffer_uvc = (uint8_t *)usb_iomalloc(DEFAULT_FRAME_SIZE);
 
 	// Wait until configured
