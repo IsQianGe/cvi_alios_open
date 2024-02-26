@@ -1,0 +1,11 @@
+#include "vfs.h"
+#include "fatfs_vfs.h"
+#include "cviruntime.h"
+#include "cvi_tpu_interface.h"
+#include <math.h>
+
+int BGRPacked2RBGPlanar(uint8_t *packed, uint8_t *planar, int height, int width);
+void init_yolo(CVI_MODEL_HANDLE *model, int32_t *input_num, int32_t *output_num, CVI_TENSOR **input_tensors, CVI_TENSOR **output_tensors, struct uvc_frame_info_st *stVFrame);
+void run_yolo(CVI_MODEL_HANDLE model, int32_t *input_num, int32_t *output_num, CVI_TENSOR **input_tensors, CVI_TENSOR **output_tensors, uint8_t *data);
+void draw_res(VIDEO_FRAME_S stVFrame, int32_t output_num, CVI_TENSOR *output_tensors);
+void BGR2YUV(uint8_t *yuv2, uint8_t *bgr, uint32_t width, uint32_t height);
