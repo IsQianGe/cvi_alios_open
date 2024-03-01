@@ -135,7 +135,7 @@ CVI_S32 is_media_info_update(){
 
 	switch(uvc_format_info.format_index){
 	case YUYV_FORMAT_INDEX:
-		enPixelFormat = PIXEL_FORMAT_BGR_888;
+		enPixelFormat = PIXEL_FORMAT_RGB_888;
 		break;
 	case NV21_FORMAT_INDEX:
 		enPixelFormat = PIXEL_FORMAT_NV21;
@@ -229,7 +229,7 @@ void uvc_media_update(){
 
 	switch(uvc_format_info.format_index){
 	case YUYV_FORMAT_INDEX:
-		enPixelFormat = PIXEL_FORMAT_BGR_888;
+		enPixelFormat = PIXEL_FORMAT_RGB_888;
 		break;
 	case NV21_FORMAT_INDEX:
 		enPixelFormat = PIXEL_FORMAT_NV21;
@@ -436,7 +436,7 @@ static void *send_to_uvc()
 
 				uint8_t *ptr_yuv = (uint8_t *)malloc(3 * pstChnAttr->u32Width * pstChnAttr->u32Height);
 				// convert BGR to YUYV
-				BGR2YUV(ptr_yuv, (uint8_t *)pstVideoFrame->stVFrame.u64PhyAddr[0], pstChnAttr->u32Width, pstChnAttr->u32Height);
+				RGB2YUV(ptr_yuv, (uint8_t *)pstVideoFrame->stVFrame.u64PhyAddr[0], pstChnAttr->u32Width, pstChnAttr->u32Height);
 				int data_len = pstChnAttr->u32Width * 2;
 				for(i = 0; i < (pstChnAttr->u32Height); ++i){
 					memcpy(packet_buffer_media + buf_len, ptr_yuv + buf_len_stride, data_len);

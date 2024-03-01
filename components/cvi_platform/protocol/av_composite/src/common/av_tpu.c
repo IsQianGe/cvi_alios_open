@@ -145,7 +145,7 @@ void init_yolo(CVI_MODEL_HANDLE *model, int32_t *input_num, int32_t *output_num,
 	CVI_TENSOR *input;
 	CVI_SHAPE input_shape;
 
-	const char *model_file = SD_FATFS_MOUNTPOINT "/yolov5s_fused_preprocess_aligned_input.cvimodel";
+	const char *model_file = SD_FATFS_MOUNTPOINT "/yolov5.cvimodel";
 	ret = CVI_NN_RegisterModel(model_file, model);
 	if (ret != CVI_RC_SUCCESS)
 	{
@@ -167,7 +167,7 @@ void init_yolo(CVI_MODEL_HANDLE *model, int32_t *input_num, int32_t *output_num,
 	printf("input shape: %d, %d\n", input_shape.dim[2], input_shape.dim[3]);
 }
 
-int BGRPacked2RBGPlanar(uint8_t *packed, uint8_t *planar, int height, int width)
+int RGBPacked2RGBPlanar(uint8_t *packed, uint8_t *planar, int height, int width)
 {
 	uint8_t *p_img = (uint8_t *)packed;
 	uint8_t *p_r = planar + height * width * 2;
@@ -176,24 +176,24 @@ int BGRPacked2RBGPlanar(uint8_t *packed, uint8_t *planar, int height, int width)
 
 	for (int i = 0; i < height * width; i++)
 	{
-		*p_b++ = *p_img++;
-		*p_g++ = *p_img++;
 		*p_r++ = *p_img++;
+		*p_g++ = *p_img++;
+		*p_b++ = *p_img++;
 	}
 	return 0;
 }
 
-void BGR_resize(uint8_t *input, int width, int height, uint8_t *output, int bgr_width, int bgr_height) {
-    float x_ratio = (float)width / bgr_width;
-    float y_ratio = (float)height / bgr_height;
+void RGB_resize(uint8_t *input, int width, int height, uint8_t *output, int rgb_width, int rgb_height) {
+    float x_ratio = (float)width / rgb_width;
+    float y_ratio = (float)height / rgb_height;
     
-    for (int y = 0; y < bgr_height; y++) {
-        for (int x = 0; x < bgr_width; x++) {
+    for (int y = 0; y < rgb_height; y++) {
+        for (int x = 0; x < rgb_width; x++) {
             int origin_x = (int)(x * x_ratio);
             int origin_y = (int)(y * y_ratio);
             
             int input_idx = (origin_y * width + origin_x) * 3;
-            int output_idx = (y * bgr_width + x) * 3;
+            int output_idx = (y * rgb_width + x) * 3;
             
             memcpy(output + output_idx, input + input_idx, 3);
         }
@@ -210,8 +210,8 @@ void run_yolo(CVI_MODEL_HANDLE model, int32_t *input_num, int32_t *output_num, C
 	input_shape = CVI_NN_TensorShape(input);
 	uint8_t *ptr_packed = (uint8_t *)malloc(3 *input_shape.dim[2] * input_shape.dim[3]);
 	uint8_t *ptr_planar = (uint8_t *)malloc(3 *input_shape.dim[2] * input_shape.dim[3]);
-	BGR_resize((uint8_t *)stVFrame.u64PhyAddr[0], stVFrame.u32Width, stVFrame.u32Height, ptr_packed, input_shape.dim[2], input_shape.dim[3]);
-	BGRPacked2RBGPlanar(ptr_packed, ptr_planar, input_shape.dim[2], input_shape.dim[3]);
+	RGB_resize((uint8_t *)stVFrame.u64PhyAddr[0], stVFrame.u32Width, stVFrame.u32Height, ptr_packed, input_shape.dim[2], input_shape.dim[3]);
+	RGBPacked2RGBPlanar(ptr_packed, ptr_planar, input_shape.dim[2], input_shape.dim[3]);
 	memcpy(CVI_NN_TensorPtr(input), ptr_planar, CVI_NN_TensorSize(input));
 	free(ptr_packed);
 	free(ptr_planar);
@@ -344,8 +344,8 @@ void draw(VIDEO_FRAME_S stVFrame, detection *dets, int32_t dets_num, uint64_t st
 		pos1 = &frame[(y1 * width + x1) * color];
 		pos2 = &frame[(y2 * width + x1) * color];
 		for (j = x1; j <= x2; j++) {
-		*(pos1 + 2) = PIXEL_VALUE;
-		*(pos2 + 2) = PIXEL_VALUE;
+		*pos1 = PIXEL_VALUE;
+		*pos2 = PIXEL_VALUE;
 		pos1 += color;
 		pos2 += color;
 		}
@@ -354,8 +354,8 @@ void draw(VIDEO_FRAME_S stVFrame, detection *dets, int32_t dets_num, uint64_t st
 		pos1 = &frame[((y1 + 1) * width + x1) * color];
 		pos2 = &frame[((y1 + 1) * width + x2) * color];
 		for (j = y1 + 1; j < y2; j++) {
-		*(pos1 + 2) = PIXEL_VALUE;
-		*(pos2 + 2) = PIXEL_VALUE;
+		*pos1 = PIXEL_VALUE;
+		*pos2 = PIXEL_VALUE;
 		pos1 += width * color;
 		pos2 += width * color;
 		}
@@ -404,10 +404,11 @@ void draw_res(VIDEO_FRAME_S stVFrame, int32_t input_num, int32_t output_num, CVI
 		CVI_TENSOR *output_tensor = &output_tensors[j];
 		float *output_ptr = (float *)CVI_NN_TensorPtr(output_tensor);
 		int w_stride = 1;
-		int h_stride = output_shape.dim[3] * w_stride; //80
-		int o_stride = output_shape.dim[2] * h_stride; //80 * 80 = 6400
-		int a_stride = bbox_len * o_stride; 		// 85 * 80 * 80 = 57600
-		float down_stride = 640 / output_shape.dim[3]; // 640 / 80 = 8
+		int h_stride = output_shape.dim[3] * w_stride;
+		int o_stride = output_shape.dim[2] * h_stride;
+		int a_stride = bbox_len * o_stride;
+		float down_stride = input_shape.dim[2] / output_shape.dim[3];
+
 		for (int a = 0; a < 3; ++a)
 		{
 			for (int i = 0; i < output_shape.dim[3] * output_shape.dim[2]; ++i)
@@ -438,7 +439,7 @@ void draw_res(VIDEO_FRAME_S stVFrame, int32_t input_num, int32_t output_num, CVI
 				detection det_obj;
 				det_obj.score = objectness;
 				det_obj.cls = category;
-				det_obj.batch_idx = 1;
+				det_obj.batch_idx = j;
 
 				det_obj.bbox.x = (sigmoid(x) * 2 - 0.5 + col) * down_stride * x_ratio;
 				det_obj.bbox.y = (sigmoid(y) * 2 - 0.5 + row) * down_stride * y_ratio;
@@ -475,21 +476,21 @@ void draw_res(VIDEO_FRAME_S stVFrame, int32_t input_num, int32_t output_num, CVI
 	free(dets);
 }
 
-void BGR2YUV(uint8_t *yuv2, uint8_t *bgr, uint32_t width, uint32_t height)
+void RGB2YUV(uint8_t *yuv2, uint8_t *rgb, uint32_t width, uint32_t height)
 {
 	uint32_t yuv2_index = 0;
-	uint32_t bgr_index = 0;
+	uint32_t rgb_index = 0;
 
 	for (uint32_t y = 0; y < height; ++y)
 	{
 		for (uint32_t x = 0; x < width; x += 2)
 		{
-			uint8_t b1 = bgr[bgr_index++];
-			uint8_t g1 = bgr[bgr_index++];
-			uint8_t r1 = bgr[bgr_index++];
-			uint8_t b2 = bgr[bgr_index++];
-			uint8_t g2 = bgr[bgr_index++];
-			uint8_t r2 = bgr[bgr_index++];
+			uint8_t r1 = rgb[rgb_index++];
+			uint8_t g1 = rgb[rgb_index++];
+			uint8_t b1 = rgb[rgb_index++];
+			uint8_t r2 = rgb[rgb_index++];
+			uint8_t g2 = rgb[rgb_index++];
+			uint8_t b2 = rgb[rgb_index++];
 
 			uint8_t y1 = (uint8_t)(0.299 * r1 + 0.587 * g1 + 0.114 * b1);
 			uint8_t u = (uint8_t)(-0.169 * r1 - 0.331 * g1 + 0.5 * b1 + 128);
