@@ -170,9 +170,9 @@ void init_yolo(CVI_MODEL_HANDLE *model, int32_t *input_num, int32_t *output_num,
 int RGBPacked2RGBPlanar(uint8_t *packed, uint8_t *planar, int height, int width)
 {
 	uint8_t *p_img = (uint8_t *)packed;
-	uint8_t *p_r = planar + height * width * 2;
+	uint8_t *p_r = planar;
 	uint8_t *p_g = planar + height * width;
-	uint8_t *p_b = planar;
+	uint8_t *p_b = planar + height * width * 2;
 
 	for (int i = 0; i < height * width; i++)
 	{
@@ -215,7 +215,7 @@ void run_yolo(CVI_MODEL_HANDLE model, int32_t *input_num, int32_t *output_num, C
 	memcpy(CVI_NN_TensorPtr(input), ptr_planar, CVI_NN_TensorSize(input));
 	free(ptr_packed);
 	free(ptr_planar);
-
+	uint32_t time = aos_now_ms();
 	ret = CVI_NN_Forward(model, *input_tensors, *input_num, *output_tensors, *output_num);
 	if (ret != CVI_RC_SUCCESS)
 	{
@@ -223,6 +223,7 @@ void run_yolo(CVI_MODEL_HANDLE model, int32_t *input_num, int32_t *output_num, C
 		CVI_NN_CleanupModel(model);
 		return;
 	}
+	printf("cvimodel forward cost %lld ms\n", aos_now_ms() - time);
 }
 
 int argmax(float *data, size_t len, size_t stride) {
@@ -273,8 +274,7 @@ void NMS(detection *dets, int *total, float thresh) {
         continue;
       for (int j = i + 1; j < *total; ++j) {
         detection *b = &dets[j];
-        if (dets[i].batch_idx == dets[j].batch_idx &&
-            b->score != 0 && dets[i].cls == dets[j].cls &&
+        if (b->score != 0 &&
             calIou(a->bbox, b->bbox) > thresh) {
           b->score = 0;
           new_count--;
@@ -426,11 +426,10 @@ void draw_res(VIDEO_FRAME_S stVFrame, int32_t input_num, int32_t output_num, CVI
 				int category = argmax(scores, classes_num, o_stride);
 				objectness *= sigmoid(scores[category * o_stride]);
 
-				if (objectness <= conf_thresh)
+				if (objectness <= conf_thresh * conf_thresh)
 				{
 					continue;
 				}
-				// printf("objectness:%f, score:%f\n", sigmoid(obj[0]), sigmoid(scores[category]));
 
 				float x = *(obj - 4 * o_stride);
 				float y = *(obj - 3 * o_stride);
