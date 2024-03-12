@@ -47,5 +47,5 @@ code: all
 .PHONY : clean
 clean:
 	rm -rf *.o *.elf *.asm *.map
-	rm os.bin
+	rm -f os.bin
 
