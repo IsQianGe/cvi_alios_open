@@ -24,8 +24,6 @@ void YOC_SYSTEM_FsVfsInit()
 	if (ret != 0)
 		LOGE("app", "aos_vfs_init failed(%d).\n", ret);
 
-
-#if CONFIG_SUPPORT_NORFLASH || CONFIG_PARTITION_SUPPORT_EMMC
 	int fatfs_en = 0;
     ret = partition_init();
     if(ret >= 0)
@@ -50,7 +48,6 @@ void YOC_SYSTEM_FsVfsInit()
     }
     else
         printf("partition_init failed! ret = %d\n" , ret);
-#endif
 
 }
 

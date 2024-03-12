@@ -1,0 +1,1 @@
+./script/aft_build.sh

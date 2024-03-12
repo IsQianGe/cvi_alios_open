@@ -380,6 +380,8 @@ int mtb_get_default_device_type(void)
     device_type = MEM_DEVICE_TYPE_EFLASH;
 #elif CONFIG_PARTITION_SUPPORT_SPINORFLASH
     device_type = MEM_DEVICE_TYPE_SPI_NOR_FLASH;
+#elif CONFIG_PARTITION_SUPPORT_SD
+    device_type = MEM_DEVICE_TYPE_SD;
 #endif
 
     return device_type;

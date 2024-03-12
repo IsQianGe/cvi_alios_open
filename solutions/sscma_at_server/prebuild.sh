@@ -1,1 +1,1 @@
-../../scripts/prebuild.sh
+./script/pre_build.sh

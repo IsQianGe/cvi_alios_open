@@ -2,7 +2,14 @@
 ## 简介
 使设备变为带有ai功能的usb摄像头，并将模型识别结果输出到视频中。
 
-## 必要配置
+## 编译步骤
+```shell
+make sscma_at_server
+```
+将生成的`sscma_at_server/generated/images`下的fib.bin及imtb文件拷贝sd卡中，插入设备。
+注：sd卡中还需要放置模型文件(yolov5.cvimodel)
+
+## 新建项目需要的配置
 ```shell
   - cherryusb: develop
 
@@ -80,15 +87,15 @@ source tpu_mlir_v1_2/envsetup.sh
 ```shell
 model_transform.py \
 --model_name yolov5s \
---model_def yolov5s/onnx/yolov5s.onnx \
+--model_def ../yolov5s.onnx \
 --input_shapes [[1,3,640,640]] \
 --mean 0.0,0.0,0.0 \
 --scale 0.0039216,0.0039216,0.0039216 \
 --keep_aspect_ratio \
 --pixel_format rgb \
---test_input ../model_yolov5n_onnx/image/dog.jpg \
+--test_input ../dog.jpg \
 --test_result yolov5s_top_outputs.npz \
---mlir yolov5s/mlir/yolov5s.mlir
+--mlir yolov5s.mlir
 ```
 其中`model_transform.py`主要参数说明如下表所示，完整的介绍参考**tpu_mlir_xxxxx/doc/TPU-MLIR开发参考手册用户界面章节**
 
@@ -96,24 +103,36 @@ model_transform.py \
 转 INT8 模型前需要跑 calibration，得到校准表；输入数据的数量根据情况准备 100~1000 张 左右。 然后用校准表，生成cvimodel
 生成校对表的图片尽可能和训练数据分布相似
 ```shell
-run_calibration.py yolov5s/mlir/yolov5s.mlir \
+run_calibration.py yolov5s.mlir \
 --dataset ../model_yolov5n_onnx/COCO2017 \
 --input_num 100 \
--o yolov5s/calibration_tabel/yolov5s_cali_table
+-o yolov5s_cali_table
 ```
 
 5）生成cvimodel
 ```shell
 model_deploy.py \
---mlir yolov5s/mlir/yolov5s.mlir \
+--mlir yolov5s.mlir \
 --quantize INT8 \
 --fuse_preprocess \
---calibration_table yolov5s/calibration_table/yolov5s_cali_table \
+--calibration_table yolov5s_cali_table \
 --chip cv181x \
---test_input yolov5s_in_f32.npz \
+--test_input ../dog.jpg \
 --test_reference yolov5s_top_outputs.npz \
 --tolerance 0.85,0.45 \
---model yolov5s/int8/yolov5.cvimodel
+--model yolov5.cvimodel
+
+model_deploy.py \
+--mlir yolov5s.mlir \
+--quantize INT8 \
+--fuse_preprocess \
+--calibration_table yolov5s_cali_table \
+--chip cv180x \
+--test_input ../image/dog.jpg \
+--test_reference yolov5s_top_outputs.npz \
+--tolerance 0.85,0.45 \
+--model yolov5s_320_cv180x.cvimodel
+
 ```
 其中`fuse_preprocess`是指定是否将预处理融合到模型中，如果指定了此参数，则模型输入为uint8类型，直接输入resize后的原图即可
 编译完成后，会生成名为`$yolov5.cvimodel$`的文件,将其拷贝到sd卡即可。

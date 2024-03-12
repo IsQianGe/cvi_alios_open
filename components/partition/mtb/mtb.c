@@ -44,6 +44,13 @@ int mtb_init(void)
             continue;
         }
 #endif
+#if defined(CONFIG_MTB_NOT_IN_NORFLASH)
+        if (i == MEM_DEVICE_TYPE_USB) {
+            MTB_LOGD("mtb skip to find dev type: %d", i);
+            i++;
+            continue;
+        }
+#endif
         storage_info.type = i;
         storage_info.id = 0;
         storage_info.area = MEM_EMMC_DEVICE_AREA_USER;

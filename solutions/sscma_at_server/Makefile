@@ -6,9 +6,11 @@ endif
 
 MK_GENERATED_IMGS_PATH:=generated
 ALGORITHMS_PATH:=../../components/chip_d1/d1_flash.elf
-
+OUTPUT_PATH:=$(CURDIR)/$(MK_GENERATED_IMGS_PATH)/data
+export OUTPUT_PATH
 HOST_TOOLS := $(CURDIR)/../../host-tools/Xuantie-900-gcc-elf-newlib-x86_64-V2.6.1/bin
 export PATH := $(HOST_TOOLS):$(PATH)
+
 PROJECT := turnkey
 .PHONY:startup
 startup: all
@@ -18,10 +20,10 @@ all:
 	$(CPRE) if [ -e $(CURDIR)/prebuild.sh ]; then bash $(CURDIR)/prebuild.sh $(shell echo $(CHIP_ARCH) | tr A-Z a-z); fi
 	$(CPRE) if [ -e package.yaml ]; then rm -f package.yaml; fi
 	$(CPRE) ln -sf customization/$(PROJECT)/package.yaml.$(PROJECT) package.yaml
-	$(CPRE) if [ -e $(CURDIR)/aft_build.sh ]; then bash $(CURDIR)/aft_build.sh; fi
 	$(CPRE) scons $(VERB) --board=$(BOARD) -j4
 	@cp yoc.bin $(MK_GENERATED_IMGS_PATH)/data/yoc.bin
 	@cp yoc.bin $(MK_GENERATED_IMGS_PATH)/data/images
+	$(CPRE) if [ -e $(CURDIR)/aft_build.sh ]; then bash $(CURDIR)/aft_build.sh; fi
 	@echo YoC SDK Done
 	@echo [INFO] Create bin files
 
@@ -29,6 +31,8 @@ all:
 	$(CPRE) product image $(MK_GENERATED_IMGS_PATH)/images.zip -i $(MK_GENERATED_IMGS_PATH)/data -l -p
 	$(CPRE) product image $(MK_GENERATED_IMGS_PATH)/images.zip -e $(MK_GENERATED_IMGS_PATH) -x
 	$(CPRE) unzip -o generated/images.zip -d generated/images
+	@cp $(MK_GENERATED_IMGS_PATH)/data/fip.bin $(MK_GENERATED_IMGS_PATH)/images/fip.bin
+	
 .PHONY:flashall
 flashall:
 	$(CPRE) product flash ${MK_GENERATED_IMGS_PATH}/images.zip -a -x gdbinit -f ${ALGORITHMS_PATH}
