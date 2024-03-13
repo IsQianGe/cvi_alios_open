@@ -8,3 +8,4 @@ fip/build/output/cvi_board_memmap.ld
 fip/build/output/cvi_board_memmap.h
 fip/build/output/cvi_board_memmap.conf
 debugloader/duoRVOS/os.asm
+!fip/fsbl/plat/cv181x/bl2_objs/**/**.o
