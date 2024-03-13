@@ -90,3 +90,4 @@ solutions/**/pqtool_definition.json
 solutions/**/.sconsign.dblite
 .yoc
 install
+solutions/**/package.yaml

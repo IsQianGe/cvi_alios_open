@@ -1,0 +1,10 @@
+debugloader/duoRVOS/os.bin
+debugloader/duoRVOS/rtos.bin
+fip/os.bin
+fip/sbi.bin
+fip/build/fip.bin
+fip/build/output/CV181X/cvi_board_memmap.ld
+fip/build/output/cvi_board_memmap.ld
+fip/build/output/cvi_board_memmap.h
+fip/build/output/cvi_board_memmap.conf
+debugloader/duoRVOS/os.asm
